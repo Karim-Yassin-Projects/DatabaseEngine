@@ -1,17 +1,19 @@
 package edu.guc.iluvmaadi;
 
+import java.util.Hashtable;
+
 public class Tests {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws DBAppException {
         //
 //        try{
-//            String strTableName = "Student";
-//            DBApp	dbApp = new DBApp( );
-//
-//            Hashtable htblColNameType = new Hashtable( );
-//            htblColNameType.put("id", "java.lang.Integer");
-//            htblColNameType.put("name", "java.lang.String");
-//            htblColNameType.put("gpa", "java.lang.double");
-//            dbApp.createTable( strTableName, "id", htblColNameType );
+            String strTableName = "Student";
+            DBApp	dbApp = new DBApp( );
+
+            Hashtable htblColNameType = new Hashtable( );
+            htblColNameType.put("id", "java.lang.Integer");
+            htblColNameType.put("name", "java.lang.String");
+            htblColNameType.put("gpa", "java.lang.double");
+            DBApp.createTable( strTableName, "id", htblColNameType );
 //            dbApp.createIndex( strTableName, "gpa", "gpaIndex" );
 //
 //            Hashtable htblColNameValue = new Hashtable( );
