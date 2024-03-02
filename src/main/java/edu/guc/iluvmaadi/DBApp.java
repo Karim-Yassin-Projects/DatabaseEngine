@@ -23,9 +23,8 @@ public class DBApp {
     // this does whatever initialization you would like
     // or leave it empty if there is no code you want to
     // execute at application startup
-    public void init( ){
-
-
+    public void init( ) throws DBAppException {
+        readConfigFile();
     }
 
 
@@ -34,9 +33,37 @@ public class DBApp {
         return "src/main/resources/DBApp.config";
     }
 
-    private void readConfigFile(){
+    private void readConfigFile() throws DBAppException {
         Properties properties = new Properties();
+        try {
+            try (FileInputStream fileInputStream = (FileInputStream) getClass().getModule().getResourceAsStream("DBApp.config")) {
+                properties.load(fileInputStream);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            String strPageSize = properties.getProperty("MaximumRowsCountinPage");
+            if (strPageSize != null) {
+                int pageSize = Integer.parseInt(strPageSize);
+                if (pageSize < 1) {
+                    throw new DBAppException("Page size must be greater than 0");
+                }
+            } else {
+                throw new DBAppException("Page size not found in config file");
+            }
+        } catch (NumberFormatException e) {
+            //ignore
+        } catch (DBAppException e) {
+            //ignore
+        }
+    }
 
+    public Table getTable(String tableName) throws DBAppException{
+        for(Table table: tables.values()){
+            if(table.getTableName().equals(tableName)){
+                return table;
+            }
+        }
+        throw new DBAppException("Table not found");
     }
 
 
@@ -54,7 +81,7 @@ public class DBApp {
                 throw new DBAppException("Table already exists");
             }
         }
-        Table newTable = new Table(strTableName, new Vector<Column>());
+        Table newTable = new Table(strTableName);
         for(String colName: htblColNameType.keySet()){
             newTable.addColumn(colName, htblColNameType.get(colName));
         }

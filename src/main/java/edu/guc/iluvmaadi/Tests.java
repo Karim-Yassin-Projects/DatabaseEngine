@@ -12,7 +12,7 @@ public class Tests {
             Hashtable htblColNameType = new Hashtable( );
             htblColNameType.put("id", "java.lang.Integer");
             htblColNameType.put("name", "java.lang.String");
-            htblColNameType.put("gpa", "java.lang.double");
+            htblColNameType.put("gpa", "java.lang.Double");
             DBApp.createTable( strTableName, "id", htblColNameType );
 //            dbApp.createIndex( strTableName, "gpa", "gpaIndex" );
 //
