@@ -1,19 +1,17 @@
 package edu.guc.iluvmaadi;
 
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
-import java.util.*;
-
-/** * @author Wael Abouelsaadat */
-
+import java.util.Hashtable;
 import java.util.Iterator;
+import java.util.Properties;
 
 
 public class DBApp {
 
     static Hashtable<String, Table> tables = new Hashtable<String, Table>();
+    public static int pageSize;
 
 
     public DBApp( ){
@@ -43,7 +41,7 @@ public class DBApp {
             }
             String strPageSize = properties.getProperty("MaximumRowsCountinPage");
             if (strPageSize != null) {
-                int pageSize = Integer.parseInt(strPageSize);
+                pageSize = Integer.parseInt(strPageSize);
                 if (pageSize < 1) {
                     throw new DBAppException("Page size must be greater than 0");
                 }
@@ -106,8 +104,16 @@ public class DBApp {
                     else{
                         bufferedWriter.write("False,");
                     }
-                    bufferedWriter.write("\n");
-                    //colums index name and type still nol added
+
+                    if(col.getIndexName() != null){
+                        bufferedWriter.write(col.getIndexName() + ",");
+                        bufferedWriter.write(  "B+Tree");
+                        bufferedWriter.write("\n");
+                    }
+                    else{
+                        bufferedWriter.write("null,null");
+                        bufferedWriter.write("\n");
+                    }
                 }
 
             }
@@ -122,7 +128,18 @@ public class DBApp {
                             String   strColName,
                             String   strIndexName) throws DBAppException{
 
-        throw new DBAppException("not implemented yet");
+        if(getTable(strTableName) == null){
+            throw new DBAppException("Table not found");
+        }
+        if(getTable(strTableName).getColumn(strColName) == null){
+            throw new DBAppException("Column not found");
+        }
+        if(getTable(strTableName).getColumn(strColName).getIndexName() != null){
+            throw new DBAppException("Index already exists");
+        }
+        getTable(strTableName).getColumn(strColName).setIndexName(strIndexName);
+        saveMetaData();
+        //lessa el bplustree msh mawgoud
     }
 
 

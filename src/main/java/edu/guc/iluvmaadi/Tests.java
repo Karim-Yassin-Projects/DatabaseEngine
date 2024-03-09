@@ -14,7 +14,7 @@ public class Tests {
             htblColNameType.put("name", "java.lang.String");
             htblColNameType.put("gpa", "java.lang.Double");
             DBApp.createTable( strTableName, "id", htblColNameType );
-//            dbApp.createIndex( strTableName, "gpa", "gpaIndex" );
+            dbApp.createIndex( strTableName, "gpa", "gpaIndex" );
 //
 //            Hashtable htblColNameValue = new Hashtable( );
 //            htblColNameValue.put("id", new Integer( 2343432 ));

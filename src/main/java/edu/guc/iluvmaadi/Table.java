@@ -8,6 +8,8 @@ public class Table {
     private String clusteringKey;
     private Vector<Column> columns = new Vector<Column>();
 
+    public String[] pageFileNames;
+
     public Table(String tableName) {
         this.tableName = tableName;
         this.columns = new Vector<Column>();
@@ -41,6 +43,12 @@ public class Table {
                 return;
             }
 
+        }
+    }
+
+    public void initializePageFileName(){
+        for(int i = 0; i < pageFileNames.length; i++){
+            pageFileNames[i] = tableName + (i+1) + ".class";
         }
     }
 
