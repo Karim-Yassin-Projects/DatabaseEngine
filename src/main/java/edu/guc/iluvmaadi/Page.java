@@ -5,8 +5,8 @@ import java.util.Vector;
 
 public class Page implements Serializable {
     private int pageNumber;
-    private int max;
-    private int min;
+    private Comparable<Object> max;
+    private Comparable<Object> min;
     private final int size = DBApp.pageSize;
     private int currentSize;
     private Vector<Tuple> tuples;
@@ -14,7 +14,7 @@ public class Page implements Serializable {
 
 
 
-    public Page(int pageNumber, String tableName, int max, int min) {
+    public Page(int pageNumber, String tableName, Comparable<Object> max, Comparable<Object> min) {
         this.pageNumber = pageNumber;
         this.max = max;
         this.min = min;
@@ -29,11 +29,11 @@ public class Page implements Serializable {
         return pageNumber;
     }
 
-    public int getMax() {
+    public Comparable<Object> getMax() {
         return max;
     }
 
-    public int getMin() {
+    public Comparable<Object> getMin() {
         return min;
     }
 
@@ -57,11 +57,11 @@ public class Page implements Serializable {
 
 
 
-    public void setMax(int max) {
+    public void setMax(Comparable<Object> max) {
         this.max = max;
     }
 
-    public void setMin(int min) {
+    public void setMin(Comparable<Object> min) {
         this.min = min;
     }
 
