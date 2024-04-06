@@ -1,5 +1,5 @@
 package edu.guc.iluvmaadi;
-/**
+/*
  * @author Wael Abouelsaadat
  */
 
@@ -31,7 +31,7 @@ public class DBApp {
                 properties.load(in);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            //e.printStackTrace();
         }
         String strMaximumRowsCountinPage = properties.getProperty("MaximumRowsCountinPage");
         if (strMaximumRowsCountinPage != null) {
@@ -71,7 +71,7 @@ public class DBApp {
         saveMetadata();
     }
 
-    public Table getTable(String strTableName) throws DBAppException {
+    public Table getTable(String strTableName) {
         if (!tables.containsKey(strTableName)) {
             return null;
         }
@@ -217,7 +217,7 @@ public class DBApp {
     // htblColNameValue will not include clustering key as column name
     // strClusteringKeyValue is the value to look for to find the row to update.
     public void updateTable(String strTableName,
-                            String strClusteringKeyValue,
+                            Comparable<Object> clusteringKeyValue,
                             Hashtable<String, Object> htblColNameValue) throws DBAppException {
 
         Table table = getTable(strTableName);
@@ -233,10 +233,11 @@ public class DBApp {
             if (!column.getType().equals(value.getClass().getName())) {
                 throw new DBAppException("Invalid value type for column " + column.getName());
             }
+            //noinspection unchecked
             values.add((Comparable<Object>) value);
         }
         Tuple tuple = new Tuple(values);
-        if(!tuple.getKey().equals(strClusteringKeyValue)){
+        if(!tuple.getKey().equals(clusteringKeyValue)){
             throw new DBAppException("Clustering key value does not match");
         }
         else{
@@ -251,7 +252,7 @@ public class DBApp {
     // following method could be used to delete one or more rows.
     // htblColNameValue holds the key and value. This will be used in search
     // to identify which rows/tuples to delete.
-    // htblColNameValue enteries are ANDED together
+    // htblColNameValue entries are ANDed together
     public void deleteFromTable(String strTableName,
                                 Hashtable<String, Object> htblColNameValue) throws DBAppException {
 
@@ -269,6 +270,7 @@ public class DBApp {
             if (!column.getType().equals(value.getClass().getName())) {
                 throw new DBAppException("Invalid value type for column " + column.getName());
             }
+            //noinspection unchecked
             values.add((Comparable<Object>) value);
         }
         Tuple tuple = new Tuple(values);

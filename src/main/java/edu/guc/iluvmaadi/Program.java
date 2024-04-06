@@ -7,7 +7,7 @@ public class Program {
     public static void main( String[] args ){
 
         try{
-            DBApp	dbApp = new DBApp( );
+            DBApp dbApp = new DBApp();
 
             //System.out.println(dbApp.maximumRowsCountinPage);
 
@@ -50,6 +50,7 @@ public class Program {
             }
         }
         catch(Exception exp){
+            //noinspection CallToPrintStackTrace
             exp.printStackTrace( );
         }
     }

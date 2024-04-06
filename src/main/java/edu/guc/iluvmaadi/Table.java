@@ -104,7 +104,7 @@ public class Table implements Iterable<Tuple> {
         int pageIndex = findPageForDelete(tuple.getKey());
         PageInfo pageInfo = tableInfo.getPagesInfo().get(pageIndex);
         Page page = loadPage(pageInfo.getPageNumber());
-        if (page.delete(tuple.getKey())) {
+        if (page.delete(tuple)) {
             savePage(pageInfo.getPageNumber(), page);
 
             if (page.getTuples().isEmpty()) {
@@ -196,15 +196,19 @@ public class Table implements Iterable<Tuple> {
     private void savePage(int pageNumber, Page page) throws DBAppException {
         File file = new File(getPagePath(pageNumber));
         // If page is empty delete the file
-        if (page.getTuples().size() == 0) {
+        if (page.getTuples().isEmpty()) {
             if (file.exists()) {
-                file.delete();
+                if (!file.delete()) {
+                    throw new DBAppException("Error deleting file " + file.getAbsolutePath());
+                }
             }
             return;
         }
         File parent = file.getParentFile();
         if (!parent.exists()) {
-            parent.mkdirs();
+            if (!parent.mkdirs()) {
+                throw new DBAppException("Error creating directory " + parent.getAbsolutePath());
+            }
 
         }
         try (FileOutputStream fileOutputStream = new FileOutputStream(file.getAbsoluteFile())) {
@@ -301,10 +305,7 @@ public class Table implements Iterable<Tuple> {
                 return false;
             }
             PageInfo pageInfo = tableInfo.getPagesInfo().get(pageIndex);
-            if (tupleIndex < pageInfo.getSize()) {
-                return true;
-            }
-            return false;
+            return tupleIndex < pageInfo.getSize();
         }
 
         public Tuple next() {

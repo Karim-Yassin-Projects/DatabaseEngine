@@ -40,10 +40,16 @@ public class Page implements Serializable {
         return true;
     }
 
-    public boolean delete(Comparable<Object> key) {
-        int index = binarySearch(key);
+    public boolean delete(Tuple tuple) {
+        int index = binarySearch(tuple.getKey());
         if (index < 0) {
             return false;
+        }
+        var toRemove = tuples.get(index);
+        for (int i = 0; i < toRemove.getValues().size(); i++) {
+            if (!toRemove.getValues().get(i).equals(tuple.getValues().get(i))) {
+                return false;
+            }
         }
         tuples.remove(index);
         return true;

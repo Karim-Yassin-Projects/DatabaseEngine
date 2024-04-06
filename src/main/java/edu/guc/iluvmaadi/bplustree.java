@@ -1,4 +1,4 @@
-package eg.edu.guc.iluvmaadi;
+package edu.guc.iluvmaadi;
 
 import java.lang.*;
 import java.util.*;

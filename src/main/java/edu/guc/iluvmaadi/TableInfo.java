@@ -10,7 +10,7 @@ public class TableInfo implements java.io.Serializable {
 
     private final Vector<PageInfo> pagesInfo = new Vector<>();
     private int nextPageNumber = 0;
-    private String tableName;
+    private final String tableName;
 
     public TableInfo(String tableName) {
         this.tableName = tableName;
@@ -20,7 +20,9 @@ public class TableInfo implements java.io.Serializable {
         File file = new File(getTablePath(tableName));
         File parent = file.getParentFile();
         if (!parent.exists()) {
-            parent.mkdirs();
+            if (!parent.mkdirs()) {
+                throw new DBAppException("Error creating directory " + parent.getAbsolutePath());
+            }
         }
         try (FileOutputStream fileOutputStream = new FileOutputStream(file.getAbsoluteFile());
              ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)) {
