@@ -1,67 +1,42 @@
 package edu.guc.iluvmaadi;
+/**
+ * @author Wael Abouelsaadat
+ */
 
-import java.io.BufferedWriter;
-import java.io.FileInputStream;
-import java.io.FileWriter;
-import java.util.Hashtable;
-import java.util.Iterator;
-import java.util.Properties;
-
+import java.io.*;
+import java.util.*;
 
 public class DBApp {
 
-    static Hashtable<String, Table> tables = new Hashtable<String, Table>();
-    public static int pageSize;
+    public static int maximumRowsCountinPage = 200;
+    public final Hashtable<String, Table> tables = new Hashtable<>();
 
 
-    public DBApp( ){
-
+    public DBApp() throws DBAppException {
+        init();
     }
 
     // this does whatever initialization you would like
     // or leave it empty if there is no code you want to
     // execute at application startup
-    public void init( ) throws DBAppException {
-        readConfigFile();
+    public void init() throws DBAppException {
+        loadConfiguration();
+        loadMetadata();
     }
 
-
-
-    private String getFilePath(){
-        return "src/main/resources/DBApp.config";
-    }
-
-    private void readConfigFile() throws DBAppException {
+    private void loadConfiguration() {
         Properties properties = new Properties();
         try {
-            try (FileInputStream fileInputStream = (FileInputStream) getClass().getModule().getResourceAsStream("DBApp.config")) {
-                properties.load(fileInputStream);
-            } catch (Exception e) {
-                e.printStackTrace();
+            try (InputStream in = getClass().getModule().getResourceAsStream("DBApp.config")) {
+                properties.load(in);
             }
-            String strPageSize = properties.getProperty("MaximumRowsCountinPage");
-            if (strPageSize != null) {
-                pageSize = Integer.parseInt(strPageSize);
-                if (pageSize < 1) {
-                    throw new DBAppException("Page size must be greater than 0");
-                }
-            } else {
-                throw new DBAppException("Page size not found in config file");
-            }
-        } catch (NumberFormatException e) {
-            //ignore
-        } catch (DBAppException e) {
-            //ignore
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-    }
-
-    public Table getTable(String tableName) throws DBAppException{
-        for(Table table: tables.values()){
-            if(table.getTableName().equals(tableName)){
-                return table;
-            }
+        String strMaximumRowsCountinPage = properties.getProperty("MaximumRowsCountinPage");
+        if (strMaximumRowsCountinPage != null) {
+            maximumRowsCountinPage = Integer.parseInt(strMaximumRowsCountinPage);
         }
-        throw new DBAppException("Table not found");
     }
 
 
@@ -71,84 +46,169 @@ public class DBApp {
     // be passed in htblColNameType
     // htblColNameValue will have the column name as key and the data
     // type as value
-    public static void createTable(String strTableName,
+    public void createTable(String strTableName,
                             String strClusteringKeyColumn,
-                            Hashtable<String,String> htblColNameType) throws DBAppException{
-        for(Table table: tables.values()){
-            if(table.getTableName().equals(strTableName)) {
-                throw new DBAppException("Table already exists");
-            }
+                            Hashtable<String, String> htblColNameType) throws DBAppException {
+
+        if (tables.containsKey(strTableName)) {
+            throw new DBAppException("Table " + strTableName + " already exists");
         }
-        Table newTable = new Table(strTableName);
-        for(String colName: htblColNameType.keySet()){
-            newTable.addColumn(colName, htblColNameType.get(colName));
+        Table table = new Table(strTableName);
+        for (String colName : htblColNameType.keySet()) {
+            table.addColumn(colName, htblColNameType.get(colName));
         }
-        tables.put(strTableName, newTable);
-        newTable.setClusteringKey(strClusteringKeyColumn);
-        saveMetaData();
+        table.setClusteringKey(strClusteringKeyColumn);
+
+        tables.put(strTableName, table);
+        saveMetadata();
     }
 
+    public void dropTable(String strTableName) throws DBAppException {
+        if (!tables.containsKey(strTableName)) {
+            throw new DBAppException("Table " + strTableName + " does not exist");
+        }
+        tables.remove(strTableName);
+        saveMetadata();
+    }
 
+    public Table getTable(String strTableName) throws DBAppException {
+        if (!tables.containsKey(strTableName)) {
+            return null;
+        }
+        return tables.get(strTableName);
+    }
 
-    public static void saveMetaData(){
-        String csvFileName = "metadata.csv";
-        try(BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(csvFileName, false))){
-            for(Table table: tables.values()){
-                for(Column col: table.getColNameType()){
-                    bufferedWriter.write(table.getTableName() + ",");
-                    bufferedWriter.write(col.getName() + ",");
-                    bufferedWriter.write(col.getType() + ",");
-                    if(col.getName().equals(table.getClusteringKey())){
-                        bufferedWriter.write("True,");
-                    }
-                    else{
-                        bufferedWriter.write("False,");
-                    }
+    private String getMetadataPath() {
+        return "dbengine-data/metadata.csv";
+    }
 
-                    if(col.getIndexName() != null){
-                        bufferedWriter.write(col.getIndexName() + ",");
-                        bufferedWriter.write(  "B+Tree");
-                        bufferedWriter.write("\n");
-                    }
-                    else{
-                        bufferedWriter.write("null,null");
-                        bufferedWriter.write("\n");
-                    }
+    private void loadMetadata() throws DBAppException {
+        File file = new File(getMetadataPath());
+        if (!file.exists()) {
+            return;
+        }
+        try (BufferedReader bufferedReader = new BufferedReader(new FileReader(getMetadataPath()))) {
+            String line;
+            while ((line = bufferedReader.readLine()) != null) {
+                String[] parts = line.split(",");
+                String tableName = parts[0];
+                String colName = parts[1];
+                String colType = parts[2];
+                String indexName = parts[4];
+                String indexType = parts[5];
+
+                boolean isClusteringKey = Boolean.parseBoolean(parts[3]);
+                if (!tables.containsKey(tableName)) {
+                    tables.put(tableName, new Table(tableName));
+                }
+                Table table = tables.get(tableName);
+                table.addColumn(colName, colType);
+                if (isClusteringKey) {
+                    table.setClusteringKey(colName);
                 }
 
+                if (!indexName.equals("null")) {
+                    if (!indexType.equals("B+tree")) {
+                        throw new DBAppException("Invalid index type: " + indexType);
+                    }
+                    Column column = table.getColumn(colName);
+                    column.setIndexName(indexName);
+                }
             }
-        } catch (Exception e){
-            e.printStackTrace();
+        } catch (IOException e) {
+            throw new DBAppException("Error loading metadata", e);
+        }
+    }
+
+    private void saveMetadata() throws DBAppException {
+        // Create the directory if it doesn't exist
+        File file = new File(getMetadataPath());
+        File directory = file.getParentFile();
+        if (!directory.exists()) {
+            if (!directory.mkdirs()) {
+                throw new DBAppException("Error creating directory " + directory);
+            }
+        }
+
+        try (FileWriter fileWriter = new FileWriter(getMetadataPath(), false)) {
+            try (BufferedWriter bufferedWriter = new BufferedWriter(fileWriter)) {
+                for (Table table : tables.values()) {
+                    for (Column column : table.getColumns()) {
+                        bufferedWriter.write(table.getTableName());
+                        bufferedWriter.write(",");
+                        bufferedWriter.write(column.getName());
+                        bufferedWriter.write(",");
+                        bufferedWriter.write(column.getType());
+                        bufferedWriter.write(",");
+                        if (column.getName().equals(table.getClusteringKey())) {
+                            bufferedWriter.write("True");
+                        } else {
+                            bufferedWriter.write("False");
+                        }
+                        if (column.getIndexName() != null) {
+                            bufferedWriter.write(",");
+                            bufferedWriter.write(column.getIndexName());
+                            bufferedWriter.write(",");
+                            bufferedWriter.write("B+tree");
+                        } else {
+                            bufferedWriter.write(",null,null");
+                        }
+                        bufferedWriter.newLine();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new DBAppException("Error saving metadata", e);
         }
     }
 
 
     // following method creates a B+tree index
-    public void createIndex(String   strTableName,
-                            String   strColName,
-                            String   strIndexName) throws DBAppException{
+    public void createIndex(String strTableName,
+                            String strColName,
+                            String strIndexName) throws DBAppException {
 
-        if(getTable(strTableName) == null){
-            throw new DBAppException("Table not found");
+        Table table = getTable(strTableName);
+        if (table == null) {
+            throw new DBAppException("Table " + strTableName + " does not exist");
         }
-        if(getTable(strTableName).getColumn(strColName) == null){
-            throw new DBAppException("Column not found");
+
+        Column column = table.getColumn(strColName);
+        if (column == null) {
+            throw new DBAppException("Column " + strColName + " does not exist");
         }
-        if(getTable(strTableName).getColumn(strColName).getIndexName() != null){
-            throw new DBAppException("Index already exists");
+
+        if (column.getIndexName() != null) {
+            throw new DBAppException("Column " + strColName + " already has an index");
         }
-        getTable(strTableName).getColumn(strColName).setIndexName(strIndexName);
-        saveMetaData();
-        //lessa el bplustree msh mawgoud
+        column.setIndexName(strIndexName);
+        saveMetadata();
     }
 
 
     // following method inserts one row only.
     // htblColNameValue must include a value for the primary key
+    @SuppressWarnings("unchecked")
     public void insertIntoTable(String strTableName,
-                                Hashtable<String,Object>  htblColNameValue) throws DBAppException{
+                                Hashtable<String, Object> htblColNameValue) throws DBAppException {
 
-        throw new DBAppException("not implemented yet");
+        Table table = getTable(strTableName);
+        if (table == null) {
+            throw new DBAppException("Table " + strTableName + " does not exist");
+        }
+        Vector<Comparable<Object>> values = new Vector<>();
+        for (Column column : table.getColumns()) {
+            Object value = htblColNameValue.get(column.getName());
+            if (value == null) {
+                throw new DBAppException("Column " + column.getName() + " is missing");
+            }
+            if (!column.getType().equals(value.getClass().getName())) {
+                throw new DBAppException("Invalid value type for column " + column.getName());
+            }
+            values.add((Comparable<Object>) value);
+        }
+        Tuple tuple = new Tuple(values);
+        table.insert(tuple);
     }
 
 
@@ -158,10 +218,34 @@ public class DBApp {
     // strClusteringKeyValue is the value to look for to find the row to update.
     public void updateTable(String strTableName,
                             String strClusteringKeyValue,
-                            Hashtable<String,Object> htblColNameValue   )  throws DBAppException{
+                            Hashtable<String, Object> htblColNameValue) throws DBAppException {
 
-        throw new DBAppException("not implemented yet");
+        Table table = getTable(strTableName);
+        if (table == null) {
+            throw new DBAppException("Table " + strTableName + " does not exist");
+        }
+        Vector<Comparable<Object>> values = new Vector<>();
+        for (Column column : table.getColumns()) {
+            Object value = htblColNameValue.get(column.getName());
+            if (value == null) {
+                throw new DBAppException("Column " + column.getName() + " is missing");
+            }
+            if (!column.getType().equals(value.getClass().getName())) {
+                throw new DBAppException("Invalid value type for column " + column.getName());
+            }
+            values.add((Comparable<Object>) value);
+        }
+        Tuple tuple = new Tuple(values);
+        if(!tuple.getKey().equals(strClusteringKeyValue)){
+            throw new DBAppException("Clustering key value does not match");
+        }
+        else{
+            table.update(tuple.getKey(), values);
+        }
+
+
     }
+
 
 
     // following method could be used to delete one or more rows.
@@ -169,22 +253,39 @@ public class DBApp {
     // to identify which rows/tuples to delete.
     // htblColNameValue enteries are ANDED together
     public void deleteFromTable(String strTableName,
-                                Hashtable<String,Object> htblColNameValue) throws DBAppException{
+                                Hashtable<String, Object> htblColNameValue) throws DBAppException {
 
-        throw new DBAppException("not implemented yet");
+        Table table = getTable(strTableName);
+        if (table == null) {
+            throw new DBAppException("Table " + strTableName + " does not exist");
+        }
+
+        Vector<Comparable<Object>> values = new Vector<>();
+        for (Column column : table.getColumns()) {
+            Object value = htblColNameValue.get(column.getName());
+            if (value == null) {
+                throw new DBAppException("Column " + column.getName() + " is missing");
+            }
+            if (!column.getType().equals(value.getClass().getName())) {
+                throw new DBAppException("Invalid value type for column " + column.getName());
+            }
+            values.add((Comparable<Object>) value);
+        }
+        Tuple tuple = new Tuple(values);
+        table.deleteFromPage(tuple);
+
     }
 
 
-    public Iterator selectFromTable(SQLTerm[] arrSQLTerms,
-                                    String[]  strarrOperators) throws DBAppException{
+    public Iterator<Tuple> selectFromTable(SQLTerm[] arrSQLTerms,
+                                           String[] strarrOperators) throws DBAppException {
+        Table table = getTable(arrSQLTerms[0].getTableName());
+        if (table == null) {
+            throw new DBAppException("Table " + arrSQLTerms[0].getTableName() + " does not exist");
+        }
+        Query query = new Query(table, arrSQLTerms, strarrOperators);
 
-        return null;
+        Iterator<Tuple> iterator = table.iterator();
+        return new FilterIterator(iterator, query);
     }
-
-
-   public static void main( String[] args ){
-
-   }
-
-
 }

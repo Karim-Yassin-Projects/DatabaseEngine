@@ -1,100 +1,91 @@
 package edu.guc.iluvmaadi;
 
-import java.io.*;
+import java.io.Serial;
+import java.io.Serializable;
 import java.util.Vector;
 
 public class Page implements Serializable {
-    private int pageNumber;
-    private Comparable<Object> max;
-    private Comparable<Object> min;
-    private final int size = DBApp.pageSize;
-    private int currentSize;
-    private Vector<Tuple> tuples;
-    private final String tableName;
 
+    @Serial
+    private static final long serialVersionUID = 1L;
 
-
-    public Page(int pageNumber, String tableName, Comparable<Object> max, Comparable<Object> min) {
-        this.pageNumber = pageNumber;
-        this.max = max;
-        this.min = min;
-        this.currentSize = 0;
-        this.tuples = new Vector<>();
-        this.tableName = tableName;
-
-
-    }
-
-    public int getPageNumber() {
-        return pageNumber;
-    }
-
-    public Comparable<Object> getMax() {
-        return max;
-    }
-
-    public Comparable<Object> getMin() {
-        return min;
-    }
-
-    public int getSize() {
-        return size;
-    }
-
-    public int getCurrentSize() {
-        return currentSize;
-    }
+    private final Vector<Tuple> tuples = new Vector<>();
 
     public Vector<Tuple> getTuples() {
         return tuples;
     }
 
-    public String getTableName() {
-        return tableName;
+    public boolean isFull() {
+        return tuples.size() == DBApp.maximumRowsCountinPage;
     }
 
-
-
-
-
-    public void setMax(Comparable<Object> max) {
-        this.max = max;
+    public void insert(Tuple tuple) throws DBAppException {
+        if (isFull()) {
+            throw new DBAppException("Page is full");
+        }
+        int index = binarySearch(tuple.getKey());
+        if (index >= 0) {
+            throw new DBAppException("Duplicate key: " + tuple.getKey());
+        }
+        index = -(index + 1);
+        tuples.add(index, tuple);
     }
 
-    public void setMin(Comparable<Object> min) {
-        this.min = min;
+    public boolean update(Comparable<Object> key, Vector<Comparable<Object>> values) {
+        int index = binarySearch(key);
+        if (index < 0) {
+            return false;
+        }
+        tuples.set(index, new Tuple(values));
+        return true;
     }
 
-    public void setCurrentSize(int currentSize) {
-        this.currentSize = currentSize;
+    public boolean delete(Comparable<Object> key) {
+        int index = binarySearch(key);
+        if (index < 0) {
+            return false;
+        }
+        tuples.remove(index);
+        return true;
     }
 
-    public int binarySearch(int key) { //index of the key{
+    public Tuple findKey(Comparable<Object> key) {
+        int index = binarySearch(key);
+        if (index < 0) {
+            return null;
+        }
+        return tuples.get(index);
+    }
+
+    private int binarySearch(Comparable<Object> key) {
         int low = 0;
-        int high = currentSize - 1;
-        while (high >= low) {
-            int middle = (low + high) / 2;
-            if (tuples.get(middle).getKey().compareTo(key) == 0) {
-                return middle;
-            }
-            if (tuples.get(middle).getKey().compareTo(key) < 0) {
-                low = middle + 1;
-            }
-            if (tuples.get(middle).getKey().compareTo(key) > 0) {
-                high = middle - 1;
-            }
+        int high = tuples.size() - 1;
+
+        while (low <= high) {
+            int mid = (low + high) / 2;
+            Comparable<Object> midVal = tuples.get(mid).getKey();
+            int cmp = midVal.compareTo(key);
+            if (cmp < 0)
+                low = mid + 1;
+            else if (cmp > 0)
+                high = mid - 1;
+            else
+                return mid; // key found
         }
-        return -1;
+        return -(low + 1);  // key not found.
     }
 
-    public void savePage(){
-        String fileName = this.tableName + "_page" + this.pageNumber + ".ser";
-        try(FileOutputStream fileOut = new FileOutputStream(fileName);
-            ObjectOutputStream out = new ObjectOutputStream(fileOut)){;
-            out.writeObject(this);
-        } catch (IOException e) {
-            e.printStackTrace();
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        for (int i = 0; i < tuples.size(); i++) {
+            Tuple tuple = tuples.get(i);
+            if (i > 0)
+                sb.append(System.lineSeparator());
+            sb.append(tuple);
         }
+        sb.append("]");
+        return sb.toString();
     }
-
 }

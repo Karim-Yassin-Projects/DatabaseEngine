@@ -2,11 +2,31 @@ package edu.guc.iluvmaadi;
 
 public class SQLTerm {
 
-    public String _strTableName,_strColumnName, _strOperator;
-    public Object _objValue;
+    private final String tableName;
+    private final String columnName;
+    private final String operator;
+    private final Comparable value;
 
-    public SQLTerm(  ){
-
+    public SQLTerm(String tableName, String columnName, String operator, Comparable value) {
+        this.tableName = tableName;
+        this.columnName = columnName;
+        this.operator = operator;
+        this.value = value;
     }
 
+    public String getTableName() {
+        return tableName;
+    }
+
+    public String getColumnName() {
+        return columnName;
+    }
+
+    public String getOperator() {
+        return operator;
+    }
+
+    public Comparable getValue() {
+        return value;
+    }
 }
