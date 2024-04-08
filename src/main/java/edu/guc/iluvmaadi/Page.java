@@ -36,6 +36,12 @@ public class Page implements Serializable {
         if (index < 0) {
             return false;
         }
+        Tuple oldValues = tuples.get(index);
+        for (int i = 1; i < values.size(); i++) {
+            if (values.get(i) == null) {
+                values.set(i, oldValues.getValues().get(i));
+            }
+        }
         tuples.set(index, new Tuple(values));
         return true;
     }
@@ -46,7 +52,10 @@ public class Page implements Serializable {
             return false;
         }
         var toRemove = tuples.get(index);
-        for (int i = 0; i < toRemove.getValues().size(); i++) {
+        for (int i = 1; i < toRemove.getValues().size(); i++) {
+            if (toRemove.getValues().get(i) == null) {
+                continue;
+            }
             if (!toRemove.getValues().get(i).equals(tuple.getValues().get(i))) {
                 return false;
             }

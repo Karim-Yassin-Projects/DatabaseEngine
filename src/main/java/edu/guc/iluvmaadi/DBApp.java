@@ -217,18 +217,30 @@ public class DBApp {
     // htblColNameValue will not include clustering key as column name
     // strClusteringKeyValue is the value to look for to find the row to update.
     public void updateTable(String strTableName,
-                            Comparable<Object> clusteringKeyValue,
+                            String strClusteringKeyValue,
                             Hashtable<String, Object> htblColNameValue) throws DBAppException {
 
         Table table = getTable(strTableName);
         if (table == null) {
             throw new DBAppException("Table " + strTableName + " does not exist");
         }
+
+        Comparable key;
+        if (table.getColumns().get(0).getType().equals(Integer.class.getName())) {
+            Integer intVal = Integer.parseInt(strClusteringKeyValue);
+            key = intVal;
+        } else if (table.getColumns().get(0).getType().equals(Double.class.getName())) {
+            Double doubleVal = Double.parseDouble(strClusteringKeyValue);
+            key = doubleVal;
+        } else {
+            key = strClusteringKeyValue;
+        }
         Vector<Comparable<Object>> values = new Vector<>();
         for (Column column : table.getColumns()) {
             Object value = htblColNameValue.get(column.getName());
             if (value == null) {
-                throw new DBAppException("Column " + column.getName() + " is missing");
+                values.add(null);
+                continue;
             }
             if (!column.getType().equals(value.getClass().getName())) {
                 throw new DBAppException("Invalid value type for column " + column.getName());
@@ -236,13 +248,9 @@ public class DBApp {
             //noinspection unchecked
             values.add((Comparable<Object>) value);
         }
+        values.set(0, key); // set the clustering key value (first column)
         Tuple tuple = new Tuple(values);
-        if(!tuple.getKey().equals(clusteringKeyValue)){
-            throw new DBAppException("Clustering key value does not match");
-        }
-        else{
-            table.update(tuple.getKey(), values);
-        }
+        table.update(tuple.getKey(), values);
 
 
     }
@@ -261,20 +269,17 @@ public class DBApp {
             throw new DBAppException("Table " + strTableName + " does not exist");
         }
 
-        Vector<Comparable<Object>> values = new Vector<>();
         for (Column column : table.getColumns()) {
             Object value = htblColNameValue.get(column.getName());
             if (value == null) {
-                throw new DBAppException("Column " + column.getName() + " is missing");
+                continue;
             }
             if (!column.getType().equals(value.getClass().getName())) {
                 throw new DBAppException("Invalid value type for column " + column.getName());
             }
             //noinspection unchecked
-            values.add((Comparable<Object>) value);
         }
-        Tuple tuple = new Tuple(values);
-        table.deleteFromPage(tuple);
+        table.delete(htblColNameValue);
 
     }
 
@@ -290,4 +295,6 @@ public class DBApp {
         Iterator<Tuple> iterator = table.iterator();
         return new FilterIterator(iterator, query);
     }
+
+
 }

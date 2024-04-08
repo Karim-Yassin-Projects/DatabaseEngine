@@ -1,8 +1,7 @@
 package edu.guc.iluvmaadi;
 
 import java.io.*;
-import java.util.Iterator;
-import java.util.Vector;
+import java.util.*;
 
 public class Table implements Iterable<Tuple> {
 
@@ -100,22 +99,18 @@ public class Table implements Iterable<Tuple> {
         tableInfo.saveTableInfo();
     }
 
-    public void deleteFromPage(Tuple tuple) throws DBAppException {
-        int pageIndex = findPageForDelete(tuple.getKey());
-        PageInfo pageInfo = tableInfo.getPagesInfo().get(pageIndex);
-        Page page = loadPage(pageInfo.getPageNumber());
-        if (page.delete(tuple)) {
-            savePage(pageInfo.getPageNumber(), page);
-
-            if (page.getTuples().isEmpty()) {
-                tableInfo.getPagesInfo().remove(pageIndex);
-            } else {
-                pageInfo.setMax(page.getTuples().lastElement().getKey());
-                pageInfo.setMin(page.getTuples().firstElement().getKey());
-                pageInfo.setSize(page.getTuples().size());
-                tableInfo.saveTableInfo();
-            }
+    public void delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
+        DeleteStrategy deleteStrategy;
+        if (htblColNameValue.containsKey(getClusteringKey())) {
+            deleteStrategy = new DeleteByClusteringKey();
+        } else if (htblColNameValue.isEmpty())
+        {
+            deleteStrategy = new DeleteAll();
+        }  else {
+            deleteStrategy = new DeleteByLooping();
         }
+
+        deleteStrategy.delete(htblColNameValue);
     }
     private int findPageForUpdate(Comparable<Object> key) {
         for (int i = 0; i < tableInfo.getPagesInfo().size(); i++) {
@@ -128,6 +123,10 @@ public class Table implements Iterable<Tuple> {
     }
     public void update(Comparable<Object> key, Vector<Comparable<Object>> values) throws DBAppException {
         int pageIndex = findPageForUpdate(key);
+
+        if (pageIndex < 0) {
+            return;
+        }
         PageInfo pageInfo = tableInfo.getPagesInfo().get(pageIndex);
         Page page = loadPage(pageInfo.getPageNumber());
         Tuple existing = page.findKey(key);
@@ -139,6 +138,9 @@ public class Table implements Iterable<Tuple> {
         }
         for (int i = 0; i < columns.size(); i++) {
             Column column = columns.get(i);
+            if (values.get(i) == null) {
+                continue;
+            }
             if (!column.getType().equals(values.get(i).getClass().getName())) {
                 throw new DBAppException("Invalid value type for column " + column.getName());
             }
@@ -190,6 +192,15 @@ public class Table implements Iterable<Tuple> {
             }
         } catch (IOException | ClassNotFoundException e) {
             throw new DBAppException("Error loading page " + pageNumber + " for table " + tableName, e);
+        }
+    }
+
+    private void deletePage(int pageNumber) throws DBAppException {
+        File file = new File(getPagePath(pageNumber));
+        if (file.exists()) {
+            if (!file.delete()) {
+                throw new DBAppException("Error deleting file " + file.getAbsolutePath());
+            }
         }
     }
 
@@ -329,5 +340,126 @@ public class Table implements Iterable<Tuple> {
             }
             return tuple;
         }
+    }
+
+    interface DeleteStrategy {
+        void delete(Hashtable<String, Object> htblColNameValue) throws DBAppException;
+    }
+
+    // This strategy is used when the delete query is empty
+    class DeleteAll implements DeleteStrategy {
+        @Override
+        public void delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
+
+            // Loop over all pages and delete all tuples
+            for (int i = 0; i < tableInfo.getPagesInfo().size(); i++) {
+                PageInfo pageInfo = tableInfo.getPagesInfo().get(i);
+                // Delete the page without loading
+                deletePage(pageInfo.getPageNumber());
+            }
+
+            // Clear the pages info
+            tableInfo.getPagesInfo().clear();
+            tableInfo.saveTableInfo();
+        }
+    }
+
+    // This strategy is used when the clustering key is not provided in the delete query
+    class DeleteByLooping implements DeleteStrategy {
+        @Override
+        public void delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
+
+            // Create a query to match the values
+            SQLTerm[] arrSQLTerms = new SQLTerm[htblColNameValue.size()];
+            String[] strarrOperators = new String[htblColNameValue.size() - 1];
+            int i = 0;
+            for (Map.Entry<String, Object> entry : htblColNameValue.entrySet()) {
+                arrSQLTerms[i++] = new SQLTerm(getTableName(), entry.getKey(), "=", (Comparable) entry.getValue());
+            }
+            for (int j = 0; j < htblColNameValue.size() - 1; j++) {
+                strarrOperators[j] = "AND";
+            }
+
+            Query query = new Query(Table.this, arrSQLTerms, strarrOperators);
+
+            // Loop over all pages and delete the tuples that match the query
+            for (i = 0; i < tableInfo.getPagesInfo().size(); i++) {
+                PageInfo pageInfo = tableInfo.getPagesInfo().get(i);
+                Page page = loadPage(pageInfo.getPageNumber());
+                for (int j = 0; j < page.getTuples().size(); j++) {
+                    Tuple tuple = page.getTuples().get(j);
+                    if (query.match(tuple)) {
+                        page.getTuples().remove(j);
+                        j--;
+                    }
+                }
+                // Save the page (savePage will delete the file if the page is empty)
+                savePage(pageInfo.getPageNumber(), page);
+                if (page.getTuples().isEmpty()) {
+                    // If the page is empty, remove it from the table info
+                    tableInfo.getPagesInfo().remove(i);
+                    i--;
+                } else {
+                    // Update the page info
+                    pageInfo.setMax(page.getTuples().lastElement().getKey());
+                    pageInfo.setMin(page.getTuples().firstElement().getKey());
+                    pageInfo.setSize(page.getTuples().size());
+                }
+            }
+            tableInfo.saveTableInfo();
+        }
+    }
+
+
+    // this strategy is used when the clustering key is provided in the delete query
+    class DeleteByClusteringKey implements DeleteStrategy {
+        @Override
+        public void delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
+            // get the clustering key value
+            Comparable<Object> key = (Comparable<Object>)htblColNameValue.get(getClusteringKey());
+
+            // find the page index that contains the key
+            int pageIndex = findPageForDelete(key);
+
+            // if the key is not found, return
+            if (pageIndex < 0) {
+                return;
+            }
+
+            // load the page
+            PageInfo pageInfo = tableInfo.getPagesInfo().get(pageIndex);
+            Page page = loadPage(pageInfo.getPageNumber());
+
+            // create tuple to pass to Page.delete method
+            Vector<Comparable<Object>> values = new Vector<>();
+            for (Column column : columns) {
+                Object value = htblColNameValue.get(column.getName());
+                if (value == null) {
+                    values.add(null);
+                } else {
+                    values.add((Comparable<Object>) value);
+                }
+            }
+            Tuple tuple = new Tuple(values);
+
+            // Delete from the page
+            if (page.delete(tuple)) {
+
+                // Save the page (savePage will delete the file if the page is empty)
+                savePage(pageInfo.getPageNumber(), page);
+
+                if (page.getTuples().isEmpty()) {
+                    // If the page is empty, remove it from the table info
+                    tableInfo.getPagesInfo().remove(pageIndex);
+                } else {
+                    // Update the page info
+                    pageInfo.setMax(page.getTuples().lastElement().getKey());
+                    pageInfo.setMin(page.getTuples().firstElement().getKey());
+                    pageInfo.setSize(page.getTuples().size());
+                    tableInfo.saveTableInfo();
+                }
+            }
+        }
+
     }
 }

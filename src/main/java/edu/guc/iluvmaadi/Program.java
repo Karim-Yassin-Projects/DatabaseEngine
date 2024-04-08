@@ -37,13 +37,34 @@ public class Program {
             arrSQLTerms = new SQLTerm[3];
             arrSQLTerms[0] = new SQLTerm("Student", "name", ">=", "John Noor-10");
             arrSQLTerms[1] = new SQLTerm("Student", "name", "<", "John Noor-15");
-            arrSQLTerms[2] = new SQLTerm("Student", "gpa", "<", 2.0);
+            arrSQLTerms[2] = new SQLTerm("Student", "gpa", "<", 3.0);
 
             String[]strarrOperators = new String[2];
             strarrOperators[0] = "AND";
             strarrOperators[1] = "AND";
 
             Iterator<Tuple> iterator = dbApp.selectFromTable(arrSQLTerms, strarrOperators);
+            while (iterator.hasNext()) {
+                Tuple tuple = iterator.next();
+                System.out.println(tuple);
+            }
+
+            Hashtable<String, Object> htblColNameValue = new Hashtable<>( );
+            //htblColNameValue.put("name", "John Noor-13 Updated" );
+            //htblColNameValue.put("gpa", 2.5 );
+
+            dbApp.updateTable( strTableName, "-13", htblColNameValue );
+
+            iterator = dbApp.selectFromTable(arrSQLTerms, strarrOperators);
+            while (iterator.hasNext()) {
+                Tuple tuple = iterator.next();
+                System.out.println(tuple);
+            }
+
+
+            dbApp.deleteFromTable( strTableName, htblColNameValue);
+
+            iterator = dbApp.selectFromTable(arrSQLTerms, strarrOperators);
             while (iterator.hasNext()) {
                 Tuple tuple = iterator.next();
                 System.out.println(tuple);
