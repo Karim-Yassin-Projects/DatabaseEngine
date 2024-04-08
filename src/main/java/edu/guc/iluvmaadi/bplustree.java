@@ -1,9 +1,11 @@
 package edu.guc.iluvmaadi;
 
-import java.lang.*;
-import java.util.*;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 
-public class BPlusTree {
+public class BPlusTree implements Serializable {
     int m;
     InternalNode root;
     LeafNode firstLeaf;
@@ -19,7 +21,7 @@ public class BPlusTree {
      * @param t: target key value of dictionary pair being searched for
      * @return index of the target value if found, else a negative value
      */
-    private int binarySearch(DictionaryPair[] dps, int numPairs, Comparable<Object> t) {
+    private int binarySearch(DictionaryPair[] dps, int numPairs, Comparable t) {
         Comparator<DictionaryPair> c = Comparator.naturalOrder();
         return Arrays.binarySearch(dps, 0, numPairs, new DictionaryPair(t, 0), c);
     }
@@ -31,10 +33,10 @@ public class BPlusTree {
      * @param key: the unique key that lies within the dictionary of a LeafNode object
      * @return the LeafNode object that contains the key within its dictionary
      */
-    private LeafNode findLeafNode(Comparable<Object> key) {
+    private LeafNode findLeafNode(Comparable key) {
 
         // Initialize keys and index variable
-        Comparable<Object>[] keys = this.root.keys;
+        Comparable[] keys = this.root.keys;
         int i;
 
         // Find next node on path to appropriate leaf node
@@ -52,10 +54,10 @@ public class BPlusTree {
         }
     }
 
-    private LeafNode findLeafNode(InternalNode node, Comparable<Object> key) {
+    private LeafNode findLeafNode(InternalNode node, Comparable key) {
 
         // Initialize keys and index variable
-        Comparable<Object>[] keys = node.keys;
+        Comparable[] keys = node.keys;
         int i;
 
         // Find next node on path to appropriate leaf node
@@ -129,7 +131,7 @@ public class BPlusTree {
             sibling = in.rightSibling;
 
             // Copy 1 key and pointer from sibling (atm just 1 key)
-            Comparable<Object> borrowedKey = sibling.keys[0];
+            Comparable borrowedKey = sibling.keys[0];
             Node pointer = sibling.childPointers[0];
 
             // Copy root key and pointer into parent
@@ -315,8 +317,8 @@ public class BPlusTree {
 
         // Split keys and pointers in half
         int midpoint = getMidpoint();
-        Comparable<Object> newParentKey = in.keys[midpoint];
-        Comparable<Object>[] halfKeys = splitKeys(in.keys, midpoint);
+        Comparable newParentKey = in.keys[midpoint];
+        Comparable[] halfKeys = splitKeys(in.keys, midpoint);
         Node[] halfPointers = splitChildPointers(in, midpoint);
 
         // Change degree of original InternalNode in
@@ -339,7 +341,7 @@ public class BPlusTree {
         if (parent == null) {
 
             // Create new root node and add midpoint key and pointers
-            Comparable<Object>[] keys = new Comparable[this.m];
+            Comparable[] keys = new Comparable[this.m];
             keys[0] = newParentKey;
             InternalNode newRoot = new InternalNode(this.m, keys);
             newRoot.appendChildPointer(in);
@@ -371,9 +373,9 @@ public class BPlusTree {
      * @param split: the index where the split is to occur
      * @return Integer[] of removed keys
      */
-    private Comparable<Object>[] splitKeys(Comparable<Object>[] keys, int split) {
+    private Comparable[] splitKeys(Comparable[] keys, int split) {
 
-        Comparable<Object>[] halfKeys = new Comparable[this.m];
+        Comparable[] halfKeys = new Comparable[this.m];
 
         // Remove split-indexed value from keys
         keys[split] = null;
@@ -395,7 +397,7 @@ public class BPlusTree {
      * @param key: an integer key that corresponds with an existing dictionary
      *             pair
      */
-    public void delete(Comparable<Object> key) {
+    public void delete(Comparable key) {
         if (isEmpty()) {
 
             /* Flow of execution goes here when B+ tree has no dictionary pairs */
@@ -534,7 +536,7 @@ public class BPlusTree {
      * @param key: an integer key to be used in the dictionary pair
      * @param value: a floating point number to be used in the dictionary pair
      */
-    public void insert(Comparable<Object> key, Object value){
+    public void insert(Comparable key, Object value){
         if (isEmpty()) {
 
             /* Flow of execution goes here only when first insert takes place */
@@ -568,7 +570,7 @@ public class BPlusTree {
                     /* Flow of execution goes here when there is 1 node in tree */
 
                     // Create internal node to serve as parent, use dictionary midpoint key
-                    Comparable<Object>[] parent_keys = new Comparable[this.m];
+                    Comparable[] parent_keys = new Comparable[this.m];
                     parent_keys[0] = halfDict[0].key;
                     InternalNode parent = new InternalNode(this.m, parent_keys);
                     ln.parent = parent;
@@ -579,7 +581,7 @@ public class BPlusTree {
                     /* Flow of execution goes here when parent exists */
 
                     // Add new key to parent for proper indexing
-                    Comparable<Object> newParentKey = halfDict[0].key;
+                    Comparable newParentKey = halfDict[0].key;
                     ln.parent.keys[ln.parent.degree - 1] = newParentKey;
                     Arrays.sort(ln.parent.keys, 0, ln.parent.degree);
                 }
@@ -628,7 +630,7 @@ public class BPlusTree {
      * @param key: the key to be searched within the B+ tree
      * @return the floating point value associated with the key within the B+ tree
      */
-    public Object search(Comparable<Object> key) {
+    public Object search(Comparable key) {
 
         // If B+ tree is completely empty, simply return null
         if (isEmpty()) { return null; }
@@ -657,7 +659,7 @@ public class BPlusTree {
      * @return an ArrayList<Double> that holds all values of dictionary pairs
      * whose keys are within the specified range
      */
-    public ArrayList<Object> search(Comparable<Object> lowerBound, Comparable<Object> upperBound) {
+    public ArrayList<Object> search(Comparable lowerBound, Comparable upperBound) {
 
         // Instantiate Double array to hold values
         ArrayList<Object> values = new ArrayList<>();
@@ -702,7 +704,7 @@ public class BPlusTree {
      * This class represents a general node within the B+ tree and serves as a
      * superclass of InternalNode and LeafNode.
      */
-    public class Node {
+    public class Node implements Serializable {
         InternalNode parent;
     }
 
@@ -717,7 +719,7 @@ public class BPlusTree {
         int degree;
         InternalNode leftSibling;
         InternalNode rightSibling;
-        Comparable<Object>[] keys;
+        Comparable[] keys;
         Node[] childPointers;
 
         /**
@@ -853,7 +855,7 @@ public class BPlusTree {
          * @param m: the max degree of the InternalNode
          * @param keys: the list of keys that InternalNode is initialized with
          */
-        private InternalNode(int m, Comparable<Object>[] keys) {
+        private InternalNode(int m, Comparable[] keys) {
             this.maxDegree = m;
             this.minDegree = (int)Math.ceil(m/2.0);
             this.degree = 0;
@@ -867,7 +869,7 @@ public class BPlusTree {
          * @param keys: the list of keys that InternalNode is initialized with
          * @param pointers: the list of pointers that InternalNode is initialized with
          */
-        private InternalNode(int m, Comparable<Object>[] keys, Node[] pointers) {
+        private InternalNode(int m, Comparable[] keys, Node[] pointers) {
             this.maxDegree = m;
             this.minDegree = (int)Math.ceil(m/2.0);
             this.degree = linearNullSearch(pointers);
@@ -1000,8 +1002,8 @@ public class BPlusTree {
      * leaf nodes of the B+ tree. The class implements the Comparable interface
      * so that the DictionaryPair objects can be sorted later on.
      */
-    public static class DictionaryPair implements Comparable<DictionaryPair> {
-        Comparable<Object> key;
+    public static class DictionaryPair implements Comparable<DictionaryPair>, Serializable {
+        Comparable key;
         Object value;
 
         /**
@@ -1009,7 +1011,7 @@ public class BPlusTree {
          * @param key: the key of the key-value pair
          * @param value: the value of the key-value pair
          */
-        public DictionaryPair(Comparable<Object>  key, Object value) {
+        public DictionaryPair(Comparable  key, Object value) {
             this.key = key;
             this.value = value;
         }
