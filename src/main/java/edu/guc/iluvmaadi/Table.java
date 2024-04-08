@@ -10,11 +10,14 @@ public class Table implements Iterable<Tuple> {
     private final String tableName;
     private final TableInfo tableInfo;
 
+    private final Hashtable<String, Index> indices;
+
 
     public Table(String tableName) throws DBAppException {
         this.tableName = tableName;
         columns = new Vector<>();
         tableInfo = TableInfo.loadTableInfo(tableName);
+        indices = new Hashtable<>();
     }
 
     public String getTableName() {
@@ -49,6 +52,71 @@ public class Table implements Iterable<Tuple> {
             }
         }
         throw new DBAppException("Column " + clusteringKey + " does not exist");
+    }
+
+    public void createIndex(String colName) throws DBAppException {
+        if (indices.containsKey(colName)) {
+            throw new DBAppException("Index on column " + colName + " already exists");
+        }
+        getColumnIndex(colName); // this will throw  if the column does not exist
+
+
+        Index index = loadIndex(colName);
+        indices.put(colName, index);
+
+    }
+
+    public String getIndexFileName(String colName) {
+        return "dbengine-data/index_" + tableName + "_" + colName + ".class";
+    }
+
+    private void populateIndex(Index index, String columnName) throws DBAppException {
+        int columnIndex = getColumnIndex(columnName);
+        for (int i = 0; i < tableInfo.getPagesInfo().size(); i++) {
+            PageInfo pageInfo = tableInfo.getPagesInfo().get(i);
+            Page page = loadPage(pageInfo.getPageNumber());
+            for (Tuple tuple : page.getTuples()) {
+                Comparable columnValue = tuple.getValues().get(columnIndex);
+                index.insert(columnValue, tuple.getKey());
+            }
+        }
+    }
+
+    private Index loadIndex(String colName) throws DBAppException {
+        File file = new File(getIndexFileName(colName));
+        if (!file.exists()) {
+            Index index = new Index();
+            populateIndex(index, colName);
+            saveIndex(colName, index);
+            return index;
+        }
+
+        try (FileInputStream fileInputStream = new FileInputStream(file.getAbsoluteFile())) {
+            try (ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)) {
+                return (Index) objectInputStream.readObject();
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            throw new DBAppException("Error loading index for column " + colName + " in table " + tableName, e);
+        }
+    }
+
+    private void saveIndex(String colName, Index index) throws DBAppException {
+        File file = new File(getIndexFileName(colName));
+
+        File parent = file.getParentFile();
+        if (!parent.exists()) {
+            if (!parent.mkdirs()) {
+                throw new DBAppException("Error creating directory " + parent.getAbsolutePath());
+            }
+
+        }
+        try (FileOutputStream fileOutputStream = new FileOutputStream(file.getAbsoluteFile())) {
+            try (ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)) {
+                objectOutputStream.writeObject(index);
+            }
+        } catch (IOException e) {
+            throw new DBAppException("Error loading index for column " + colName + " in table " + tableName, e);
+        }
     }
 
     public Vector<Column> getColumns() {
@@ -96,22 +164,32 @@ public class Table implements Iterable<Tuple> {
         }
 
         insertIntoPage(page, pageIndex, tuple);
+
+        // Update all indices
+        for (Map.Entry<String, Index> entry : indices.entrySet()) {
+            int columnIndex = getColumnIndex(entry.getKey());
+            Index index = entry.getValue();
+            Comparable columnValue = tuple.getValues().get(columnIndex);
+            index.insert(columnValue, tuple.getKey());
+
+            saveIndex(entry.getKey(), index);
+        }
         tableInfo.saveTableInfo();
     }
 
-    public void delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
+    public boolean delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
         DeleteStrategy deleteStrategy;
         if (htblColNameValue.containsKey(getClusteringKey())) {
             deleteStrategy = new DeleteByClusteringKey();
-        } else if (htblColNameValue.isEmpty())
-        {
+        } else if (htblColNameValue.isEmpty()) {
             deleteStrategy = new DeleteAll();
-        }  else {
+        } else {
             deleteStrategy = new DeleteByLooping();
         }
 
-        deleteStrategy.delete(htblColNameValue);
+        return deleteStrategy.delete(htblColNameValue);
     }
+
     private int findPageForUpdate(Comparable<Object> key) {
         for (int i = 0; i < tableInfo.getPagesInfo().size(); i++) {
             PageInfo pageInfo = tableInfo.getPagesInfo().get(i);
@@ -121,6 +199,7 @@ public class Table implements Iterable<Tuple> {
         }
         return -1;
     }
+
     public void update(Comparable<Object> key, Vector<Comparable<Object>> values) throws DBAppException {
         int pageIndex = findPageForUpdate(key);
 
@@ -133,21 +212,27 @@ public class Table implements Iterable<Tuple> {
         if (existing == null) {
             return;
         }
-        if (values.size() != columns.size()) {
-            throw new DBAppException("Invalid number of values");
+
+        // delete
+        Hashtable<String, Object> htblColNameValue = new Hashtable<>();
+        htblColNameValue.put(getClusteringKey(), key);
+        if (!delete(htblColNameValue)) {
+            return;
         }
+
+        // insert
+        Vector<Comparable<Object>> newValues = new Vector<>();
         for (int i = 0; i < columns.size(); i++) {
-            Column column = columns.get(i);
             if (values.get(i) == null) {
-                continue;
-            }
-            if (!column.getType().equals(values.get(i).getClass().getName())) {
-                throw new DBAppException("Invalid value type for column " + column.getName());
+                newValues.add(existing.getValues().get(i));
+            } else {
+                newValues.add(values.get(i));
             }
         }
-        if (page.update(key, values)) {
-            savePage(pageInfo.getPageNumber(), page);
-        }
+
+        Tuple tuple = new Tuple(newValues);
+        insert(tuple);
+
     }
 
     private void insertIntoPage(Page page, int pageIndex, Tuple tuple) throws DBAppException {
@@ -342,15 +427,34 @@ public class Table implements Iterable<Tuple> {
         }
     }
 
+    private void deleteFromIndices(Tuple tuple) throws DBAppException {
+
+        for (Map.Entry<String, Index> entry : indices.entrySet()) {
+            int columnIndex = getColumnIndex(entry.getKey());
+            Index index = entry.getValue();
+            Comparable columnValue = tuple.getValues().get(columnIndex);
+            index.delete(columnValue, tuple.getKey());
+        }
+    }
+
+    private void saveAllIndices() throws DBAppException {
+        for (Map.Entry<String, Index> entry : indices.entrySet()) {
+            saveIndex(entry.getKey(), entry.getValue());
+        }
+    }
+
     interface DeleteStrategy {
-        void delete(Hashtable<String, Object> htblColNameValue) throws DBAppException;
+        boolean delete(Hashtable<String, Object> htblColNameValue) throws DBAppException;
     }
 
     // This strategy is used when the delete query is empty
     class DeleteAll implements DeleteStrategy {
         @Override
-        public void delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
+        public boolean delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
 
+            if (tableInfo.getPagesInfo().isEmpty()) {
+                return false;
+            }
             // Loop over all pages and delete all tuples
             for (int i = 0; i < tableInfo.getPagesInfo().size(); i++) {
                 PageInfo pageInfo = tableInfo.getPagesInfo().get(i);
@@ -361,14 +465,21 @@ public class Table implements Iterable<Tuple> {
             // Clear the pages info
             tableInfo.getPagesInfo().clear();
             tableInfo.saveTableInfo();
+
+            for (Map.Entry<String, Index> entry : indices.entrySet()) {
+                Index index = entry.getValue();
+                index.clear();
+                saveIndex(entry.getKey(), index);
+            }
+            return true;
         }
     }
 
     // This strategy is used when the clustering key is not provided in the delete query
     class DeleteByLooping implements DeleteStrategy {
         @Override
-        public void delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
-
+        public boolean delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
+            boolean deleted = false;
             // Create a query to match the values
             SQLTerm[] arrSQLTerms = new SQLTerm[htblColNameValue.size()];
             String[] strarrOperators = new String[htblColNameValue.size() - 1];
@@ -390,6 +501,8 @@ public class Table implements Iterable<Tuple> {
                     Tuple tuple = page.getTuples().get(j);
                     if (query.match(tuple)) {
                         page.getTuples().remove(j);
+                        deleteFromIndices(tuple);
+                        deleted = true;
                         j--;
                     }
                 }
@@ -407,6 +520,8 @@ public class Table implements Iterable<Tuple> {
                 }
             }
             tableInfo.saveTableInfo();
+            saveAllIndices();
+            return deleted;
         }
     }
 
@@ -414,16 +529,16 @@ public class Table implements Iterable<Tuple> {
     // this strategy is used when the clustering key is provided in the delete query
     class DeleteByClusteringKey implements DeleteStrategy {
         @Override
-        public void delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
+        public boolean delete(Hashtable<String, Object> htblColNameValue) throws DBAppException {
             // get the clustering key value
-            Comparable<Object> key = (Comparable<Object>)htblColNameValue.get(getClusteringKey());
+            Comparable<Object> key = (Comparable<Object>) htblColNameValue.get(getClusteringKey());
 
             // find the page index that contains the key
             int pageIndex = findPageForDelete(key);
 
             // if the key is not found, return
             if (pageIndex < 0) {
-                return;
+                return false;
             }
 
             // load the page
@@ -444,7 +559,7 @@ public class Table implements Iterable<Tuple> {
 
             // Delete from the page
             if (page.delete(tuple)) {
-
+                deleteFromIndices(tuple);
                 // Save the page (savePage will delete the file if the page is empty)
                 savePage(pageInfo.getPageNumber(), page);
 
@@ -458,7 +573,10 @@ public class Table implements Iterable<Tuple> {
                     pageInfo.setSize(page.getTuples().size());
                     tableInfo.saveTableInfo();
                 }
+                saveAllIndices();
+                return true;
             }
+            return false;
         }
 
     }

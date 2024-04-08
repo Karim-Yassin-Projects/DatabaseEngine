@@ -115,6 +115,14 @@ public class DBApp {
                     column.setIndexName(indexName);
                 }
             }
+
+            for (Table table : tables.values()) {
+                for (Column column : table.getColumns()) {
+                    if (column.getIndexName() != null) {
+                        table.createIndex(column.getName());
+                    }
+                }
+            }
         } catch (IOException e) {
             throw new DBAppException("Error loading metadata", e);
         }
