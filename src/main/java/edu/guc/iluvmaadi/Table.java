@@ -550,7 +550,7 @@ public class Table implements Iterable<Tuple> {
         private final Index index;
         private final Comparable start;
         private final Comparable end;
-        private ArrayList<Index.IndexEntry> searchResult;
+        private Vector<Index.IndexEntry> searchResult;
         private int indexInSearchResult;
         private Hashtable<Integer, Page> loadedPages = new Hashtable<>();
 

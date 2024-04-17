@@ -2,6 +2,7 @@ package edu.guc.iluvmaadi;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Vector;
 
 public class Index implements Serializable {
 
@@ -50,11 +51,11 @@ public class Index implements Serializable {
         }
     }
 
-    ArrayList<IndexEntry> search(Comparable indexValueStart, Comparable indexValueEnd) {
+    Vector<IndexEntry> search(Comparable indexValueStart, Comparable indexValueEnd) {
         IndexEntry startEntry = new IndexEntry(indexValueStart, null, 0);
         IndexEntry endEntry = new IndexEntry(indexValueEnd, null, 0);
-        ArrayList<Object> result = tree.search(startEntry, endEntry);
-        ArrayList<IndexEntry> values = new ArrayList<>();
+        Vector<Object> result = tree.search(startEntry, endEntry);
+        Vector<IndexEntry> values = new Vector<>();
         for (Object o : result) {
             values.add((IndexEntry) o);
         }
