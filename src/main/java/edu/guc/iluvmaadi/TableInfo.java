@@ -53,7 +53,7 @@ public class TableInfo implements java.io.Serializable {
     }
 
     public static String getTablePath(String tableName) {
-        return "DBEngine-Data" + "/" + tableName + ".class";
+        return DBApp.databasePath + "/" + tableName + DBApp.fileExtension;
     }
 
     public Vector<PageInfo> getPagesInfo() {

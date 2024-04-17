@@ -67,17 +67,18 @@ public class Table implements Iterable<Tuple> {
     }
 
     public String getIndexFileName(String colName) {
-        return "dbengine-data/index_" + tableName + "_" + colName + ".class";
+        return DBApp.databasePath + "/index_" + tableName + "_" + colName + DBApp.fileExtension;
     }
 
     private void populateIndex(Index index, String columnName) throws DBAppException {
         int columnIndex = getColumnIndex(columnName);
         for (int i = 0; i < tableInfo.getPagesInfo().size(); i++) {
             PageInfo pageInfo = tableInfo.getPagesInfo().get(i);
-            Page page = loadPage(pageInfo.getPageNumber());
+            int pageNumber = pageInfo.getPageNumber();
+            Page page = loadPage(pageNumber);
             for (Tuple tuple : page.getTuples()) {
                 Comparable columnValue = tuple.getValues().get(columnIndex);
-                index.insert(columnValue, tuple.getKey());
+                index.insert(columnValue, tuple.getKey(), pageNumber);
             }
         }
     }
@@ -157,7 +158,8 @@ public class Table implements Iterable<Tuple> {
         // Find the page index to insert the tuple
         int pageIndex = findPageForInsert(tuple.getKey());
         PageInfo pageInfo = tableInfo.getPagesInfo().get(pageIndex);
-        Page page = loadPage(pageInfo.getPageNumber());
+        int pageNumber = pageInfo.getPageNumber();
+        Page page = loadPage(pageNumber);
         Tuple existing = page.findKey(tuple.getKey());
         if (existing != null) {
             throw new DBAppException("Duplicate key: " + tuple.getKey());
@@ -170,7 +172,7 @@ public class Table implements Iterable<Tuple> {
             int columnIndex = getColumnIndex(entry.getKey());
             Index index = entry.getValue();
             Comparable columnValue = tuple.getValues().get(columnIndex);
-            index.insert(columnValue, tuple.getKey());
+            index.insert(columnValue, tuple.getKey(), pageNumber);
 
             saveIndex(entry.getKey(), index);
         }
@@ -190,10 +192,10 @@ public class Table implements Iterable<Tuple> {
         return deleteStrategy.delete(htblColNameValue);
     }
 
-    private int findPageForUpdate(Comparable<Object> key) {
+    private int findPage(Comparable<Object> key) {
         for (int i = 0; i < tableInfo.getPagesInfo().size(); i++) {
             PageInfo pageInfo = tableInfo.getPagesInfo().get(i);
-            if (key.compareTo(pageInfo.getMin()) > 0 && key.compareTo(pageInfo.getMax()) < 0) {
+            if (key.compareTo(pageInfo.getMin()) >= 0 && key.compareTo(pageInfo.getMax()) <= 0) {
                 return i;
             }
         }
@@ -201,7 +203,7 @@ public class Table implements Iterable<Tuple> {
     }
 
     public void update(Comparable<Object> key, Vector<Comparable<Object>> values) throws DBAppException {
-        int pageIndex = findPageForUpdate(key);
+        int pageIndex = findPage(key);
 
         if (pageIndex < 0) {
             return;
@@ -346,16 +348,6 @@ public class Table implements Iterable<Tuple> {
         return 0;
     }
 
-    private int findPageForDelete(Comparable<Object> key) {
-        for (int i = 0; i < tableInfo.getPagesInfo().size(); i++) {
-            PageInfo pageInfo = tableInfo.getPagesInfo().get(i);
-            if (key.compareTo(pageInfo.getMin()) >= 0 && key.compareTo(pageInfo.getMax()) <= 0) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
     private int findPageForInsert(Comparable<Object> key) {
         int low = 0;
         int high = tableInfo.getPagesInfo().size() - 1;
@@ -376,12 +368,138 @@ public class Table implements Iterable<Tuple> {
     }
 
     private String getPagePath(int pageNumber) {
-        return "DBEngine-Data" + "/" + tableName + "_" + pageNumber + ".class";
+        return DBApp.databasePath + "/" + tableName + "_" + pageNumber + DBApp.fileExtension;
+    }
+
+    private Comparable canUseClusteringKey(Query query) {
+        if (query.hasOrOrXor()) {
+            return null;
+        }
+
+        SQLTerm[] sqlTerms = query.getSqlTerms();
+        for (SQLTerm sqlTerm : sqlTerms) {
+            if (sqlTerm.getColumnName().equals(getClusteringKey()) && sqlTerm.getOperator().equals("=")) {
+                return sqlTerm.getValue();
+            }
+        }
+        return null;
+    }
+
+    private Comparable[] canUseIndex(String columnName, Query query) throws DBAppException {
+        if (query.hasOrOrXor()) {
+            return null;
+        }
+
+        Comparable min = query.getMinValue(columnName);
+        Comparable max = query.getMaxValue(columnName);
+
+        if (min == null && max == null) {
+            return null;
+        }
+
+        if (min == null) {
+            String colType = getColumn(columnName).getType();
+            if (colType.equals("java.lang.Integer")) {
+                min = Integer.MIN_VALUE;
+            } else if (colType.equals("java.lang.Double")) {
+                min = Double.MIN_VALUE;
+            } else if (colType.equals("java.lang.String")) {
+                min = "";
+            }
+        }
+
+        if (max == null) {
+            String colType = getColumn(columnName).getType();
+            if (colType.equals("java.lang.Integer")) {
+                max = Integer.MAX_VALUE;
+            } else if (colType.equals("java.lang.Double")) {
+                max = Double.MAX_VALUE;
+            } else if (colType.equals("java.lang.String")) {
+                max = "\uFFFF";
+            }
+        }
+
+        return new Comparable[]{min, max};
+    }
+
+    public Iterator<Tuple> iterator(Query query) throws DBAppException {
+        Comparable key = canUseClusteringKey(query);
+        if (key != null) {
+            return new ClusteringKeyIterator(key);
+        }
+
+        for (Map.Entry<String, Index> entry : indices.entrySet()) {
+            String columnName = entry.getKey();
+            Index index = entry.getValue();
+            Comparable[] range = canUseIndex(columnName, query);
+
+             if (range != null) {
+
+                 // Handle condition where min value is greater than max value
+                 if (range[0] != null && range[1] != null && range[0].compareTo(range[1]) > 0) {
+                     return new EmptyIterator();
+                 }
+
+                 return new IndexIterator(index, range[0], range[1]);
+            }
+        }
+        return new TableIterator();
     }
 
     @Override
     public Iterator<Tuple> iterator() {
         return new TableIterator();
+    }
+
+    private class EmptyIterator implements Iterator<Tuple> {
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public Tuple next() {
+            return null;
+        }
+    }
+
+    private class ClusteringKeyIterator implements Iterator<Tuple> {
+        private final Comparable key;
+        private int pageIndex;
+        private Tuple tuple;
+        private Page page;
+
+        public ClusteringKeyIterator(Comparable key) {
+            this.key = key;
+            pageIndex = findPage(key);
+        }
+
+        public boolean hasNext() {
+            if (pageIndex < 0) {
+                return false;
+            }
+            if (page == null) {
+                try {
+                    page = loadPage(tableInfo.getPagesInfo().get(pageIndex).getPageNumber());
+                } catch (DBAppException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            if (tuple == null) {
+                tuple = page.findKey(key);
+            }
+            return tuple != null;
+        }
+
+        public Tuple next() {
+            if (pageIndex < 0) {
+                return null;
+            }
+            Tuple result = tuple;
+            pageIndex = -1;
+            tuple = null;
+            return result;
+        }
     }
 
     private class TableIterator implements Iterator<Tuple> {
@@ -424,6 +542,58 @@ public class Table implements Iterable<Tuple> {
                 tupleIndex = 0;
             }
             return tuple;
+        }
+    }
+
+    private class IndexIterator implements Iterator<Tuple> {
+
+        private final Index index;
+        private final Comparable start;
+        private final Comparable end;
+        private ArrayList<Index.IndexEntry> searchResult;
+        private int indexInSearchResult;
+        private Hashtable<Integer, Page> loadedPages = new Hashtable<>();
+
+        public IndexIterator(Index index, Comparable start, Comparable end) {
+            this.index = index;
+            this.start = start;
+            this.end = end;
+        }
+
+
+        @Override
+        public boolean hasNext() {
+            if (searchResult == null) {
+                searchResult = index.search(start, end);
+            }
+            return indexInSearchResult < searchResult.size();
+        }
+
+        private Page loadAndCachePage(int pageNumber) throws DBAppException {
+            if (loadedPages.containsKey(pageNumber)) {
+                return loadedPages.get(pageNumber);
+            }
+            Page page = loadPage(pageNumber);
+            loadedPages.put(pageNumber, page);
+            return page;
+        }
+
+        @Override
+        public Tuple next() {
+            if (searchResult == null) {
+                searchResult = index.search(start, end);
+            }
+            if (indexInSearchResult >= searchResult.size()) {
+                return null;
+            }
+            Index.IndexEntry entry = searchResult.get(indexInSearchResult);
+            indexInSearchResult++;
+            try {
+                Page page = loadAndCachePage(entry.getPageNumber());
+                return page.findKey(entry.getClusteringKeyValue());
+            } catch (DBAppException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -497,30 +667,37 @@ public class Table implements Iterable<Tuple> {
             for (i = 0; i < tableInfo.getPagesInfo().size(); i++) {
                 PageInfo pageInfo = tableInfo.getPagesInfo().get(i);
                 Page page = loadPage(pageInfo.getPageNumber());
+                boolean deletedFromPage = false;
                 for (int j = 0; j < page.getTuples().size(); j++) {
                     Tuple tuple = page.getTuples().get(j);
                     if (query.match(tuple)) {
                         page.getTuples().remove(j);
                         deleteFromIndices(tuple);
                         deleted = true;
+                        deletedFromPage = true;
                         j--;
                     }
                 }
-                // Save the page (savePage will delete the file if the page is empty)
-                savePage(pageInfo.getPageNumber(), page);
-                if (page.getTuples().isEmpty()) {
-                    // If the page is empty, remove it from the table info
-                    tableInfo.getPagesInfo().remove(i);
-                    i--;
-                } else {
-                    // Update the page info
-                    pageInfo.setMax(page.getTuples().lastElement().getKey());
-                    pageInfo.setMin(page.getTuples().firstElement().getKey());
-                    pageInfo.setSize(page.getTuples().size());
+                if (deletedFromPage) {
+                    // Save the page (savePage will delete the file if the page is empty)
+
+                    savePage(pageInfo.getPageNumber(), page);
+                    if (page.getTuples().isEmpty()) {
+                        // If the page is empty, remove it from the table info
+                        tableInfo.getPagesInfo().remove(i);
+                        i--;
+                    } else {
+                        // Update the page info
+                        pageInfo.setMax(page.getTuples().lastElement().getKey());
+                        pageInfo.setMin(page.getTuples().firstElement().getKey());
+                        pageInfo.setSize(page.getTuples().size());
+                    }
                 }
             }
-            tableInfo.saveTableInfo();
-            saveAllIndices();
+            if (deleted) {
+                tableInfo.saveTableInfo();
+                saveAllIndices();
+            }
             return deleted;
         }
     }
@@ -534,7 +711,7 @@ public class Table implements Iterable<Tuple> {
             Comparable<Object> key = (Comparable<Object>) htblColNameValue.get(getClusteringKey());
 
             // find the page index that contains the key
-            int pageIndex = findPageForDelete(key);
+            int pageIndex = findPage(key);
 
             // if the key is not found, return
             if (pageIndex < 0) {
@@ -545,20 +722,9 @@ public class Table implements Iterable<Tuple> {
             PageInfo pageInfo = tableInfo.getPagesInfo().get(pageIndex);
             Page page = loadPage(pageInfo.getPageNumber());
 
-            // create tuple to pass to Page.delete method
-            Vector<Comparable<Object>> values = new Vector<>();
-            for (Column column : columns) {
-                Object value = htblColNameValue.get(column.getName());
-                if (value == null) {
-                    values.add(null);
-                } else {
-                    values.add((Comparable<Object>) value);
-                }
-            }
-            Tuple tuple = new Tuple(values);
-
             // Delete from the page
-            if (page.delete(tuple)) {
+            Tuple tuple = page.delete(key);
+            if (tuple != null) {
                 deleteFromIndices(tuple);
                 // Save the page (savePage will delete the file if the page is empty)
                 savePage(pageInfo.getPageNumber(), page);

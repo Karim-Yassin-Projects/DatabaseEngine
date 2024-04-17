@@ -415,7 +415,8 @@ public class BPlusTree implements Serializable {
 
                 /* Flow of execution goes here when key is absent in B+ tree */
 
-                System.err.println("Invalid Delete: Key unable to be found.");
+                // Commented by Kareem ElMeteny
+                // System.err.println("Invalid Delete: Key unable to be found.");
 
             } else {
 
@@ -825,7 +826,17 @@ public class BPlusTree implements Serializable {
          * parent of a merging, deficient LeafNode.
          * @param index: the location within keys to be set to null
          */
-        private void removeKey(int index) { this.keys[index] = null; }
+        private void removeKey(int index) {
+
+            this.keys[index] = null;
+
+            // Bug fix by Kareem ElMeteny
+            if (index < this.degree - 1) {
+                for (int i = index; i < this.degree - 1; i++) {
+                    this.keys[i] = this.keys[i + 1];
+                }
+            }
+        }
 
         /**
          * This method sets childPointers[index] to null and additionally
@@ -901,6 +912,13 @@ public class BPlusTree implements Serializable {
 
             // Delete dictionary pair from leaf
             this.dictionary[index] = null;
+
+            // Bug fix by Kareem ElMeteny
+            if (index < this.numPairs - 1) {
+                for (int i = index; i < this.numPairs - 1; i++) {
+                    this.dictionary[i] = this.dictionary[i + 1];
+                }
+            }
 
             // Decrement numPairs
             numPairs--;

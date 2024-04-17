@@ -22,6 +22,10 @@ public class Query {
     }
 
     public boolean match(Tuple tuple) throws DBAppException {
+        if (tuple == null) {
+            return false;
+        }
+
         ArrayList<Boolean> results = new ArrayList<>();
         for (SQLTerm sqlTerm : sqlTerms) {
             String colName = sqlTerm.getColumnName();
@@ -61,6 +65,73 @@ public class Query {
             }
         }
         return results.get(0);
+    }
+
+    public boolean hasOrOrXor() {
+        for (String operator : operators) {
+            if (operator.equals("OR") || operator.equals("XOR")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public SQLTerm[] getSqlTerms() {
+        return sqlTerms;
+    }
+
+    public String[] getOperators() {
+        return operators;
+    }
+
+    public Comparable getMinValue(String colName) {
+
+        // If the Query contains an equality condition, return the value of that condition
+        for (SQLTerm sqlTerm : sqlTerms) {
+            if (sqlTerm.getColumnName().equals(colName)
+                    && sqlTerm.getOperator().equals("==")) {
+                return sqlTerm.getValue();
+            }
+        }
+
+        // If the query contains more than one condition on the same column with >= or > operators, return the maximum value of that condition
+        // FOR example SELECT * FROM table WHERE id >= 5 AND id > 3
+        // This should return 5
+        Comparable max = null;
+        for (SQLTerm sqlTerm : sqlTerms) {
+            if (sqlTerm.getColumnName().equals(colName)
+                    && (sqlTerm.getOperator().equals(">=") || sqlTerm.getOperator().equals(">"))) {
+                if (max == null || sqlTerm.getValue().compareTo(max) > 0) {
+                    max = sqlTerm.getValue();
+                }
+            }
+        }
+        return max;
+    }
+
+    public Comparable getMaxValue(String colName) {
+
+        // If the Query contains an equality condition, return the value of that condition
+        for (SQLTerm sqlTerm : sqlTerms) {
+            if (sqlTerm.getColumnName().equals(colName)
+                    && sqlTerm.getOperator().equals("==")) {
+                return sqlTerm.getValue();
+            }
+        }
+
+        // If the query contains more than one condition on the same column with < or <= operators, return the maximum value of that condition
+        // FOR example SELECT * FROM table WHERE id <= 5 AND id < 3
+        // This should return 3
+        Comparable min = null;
+        for (SQLTerm sqlTerm : sqlTerms) {
+            if (sqlTerm.getColumnName().equals(colName)
+                    && (sqlTerm.getOperator().equals("<=") || sqlTerm.getOperator().equals("<"))) {
+                if (min == null || sqlTerm.getValue().compareTo(min) < 0) {
+                    min = sqlTerm.getValue();
+                }
+            }
+        }
+        return min;
     }
 
     private boolean compare(Comparable<Object> value, String operator, Comparable<Object> objValue) throws DBAppException {

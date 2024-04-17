@@ -5,61 +5,69 @@ import java.util.ArrayList;
 
 public class Index implements Serializable {
 
-    private BPlusTree tree = new BPlusTree(3);
+    private static final long serialVersionUID = 1L;
+    private BPlusTree tree = new BPlusTree(DBApp.maximumRowsCountinPage + 1);
 
     public void clear() {
-        tree = new BPlusTree(3);
+        tree = new BPlusTree(DBApp.maximumRowsCountinPage + 1);
     }
 
-    static class KeyValuePair implements Serializable, Comparable<KeyValuePair> {
-        private final Comparable key;
-        private final Comparable value;
+    static class IndexEntry implements Serializable, Comparable<IndexEntry> {
+        private static final long serialVersionUID = 1L;
 
-        public KeyValuePair(Comparable key, Comparable value) {
-            this.key = key;
-            this.value = value;
+        private final Comparable indexKeyValue;
+        private final Comparable clusteringKeyValue;
+        private final int pageNumber;
+
+        public IndexEntry(Comparable indexKeyValue, Comparable clusteringKeyValue, int pageNumber) {
+            this.indexKeyValue = indexKeyValue;
+            this.clusteringKeyValue = clusteringKeyValue;
+            this.pageNumber = pageNumber;
         }
 
-        public Comparable getKey() {
-            return key;
+        public Comparable getIndexKeyValue() {
+            return indexKeyValue;
         }
 
-        public Comparable getValue() {
-            return value;
+        public Comparable getClusteringKeyValue() {
+            return clusteringKeyValue;
+        }
+
+        public int getPageNumber() {
+            return pageNumber;
         }
 
         @Override
-        public int compareTo(KeyValuePair o) {
-            int res = key.compareTo(o.key);
+        public int compareTo(IndexEntry o) {
+            int res = indexKeyValue.compareTo(o.indexKeyValue);
             if (res == 0) {
-                if (o.value == null || value == null) {
+                if (o.clusteringKeyValue == null || clusteringKeyValue == null) {
                     return 0;
                 }
+                res = clusteringKeyValue.compareTo(o.clusteringKeyValue);
             }
             return res;
         }
     }
 
-    public ArrayList<Object> search(Comparable start, Comparable end) {
-        ArrayList<Object> result = tree.search(new KeyValuePair(start, null), new KeyValuePair(end, null));
-        ArrayList<Object> values = new ArrayList<>();
+    ArrayList<IndexEntry> search(Comparable indexValueStart, Comparable indexValueEnd) {
+        IndexEntry startEntry = new IndexEntry(indexValueStart, null, 0);
+        IndexEntry endEntry = new IndexEntry(indexValueEnd, null, 0);
+        ArrayList<Object> result = tree.search(startEntry, endEntry);
+        ArrayList<IndexEntry> values = new ArrayList<>();
         for (Object o : result) {
-            values.add(((KeyValuePair) o).getValue());
+            values.add((IndexEntry) o);
         }
         return values;
     }
 
-    public void insert(Comparable key, Comparable value) {
-        KeyValuePair pair = new KeyValuePair(key, value);
+    public void insert(Comparable indexKeyValue, Comparable clusteringKeyValue, int pageNumber) {
+        IndexEntry pair = new IndexEntry(indexKeyValue, clusteringKeyValue, pageNumber);
         tree.insert(pair, pair);
     }
 
-    public void delete(Comparable key, Comparable value) {
-        tree.delete(new KeyValuePair(key, value));
-    }
-
-    public void delete(Comparable key) {
-        tree.delete(new KeyValuePair(key, null));
+    public void delete(Comparable indexKeyValue, Comparable clusteringKeyValue) {
+        tree.delete(new IndexEntry(indexKeyValue, clusteringKeyValue, 0));
     }
 
 }

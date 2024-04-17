@@ -9,6 +9,9 @@ import java.util.*;
 public class DBApp {
 
     public static int maximumRowsCountinPage = 200;
+    public static String databasePath = "dbengine-data";
+    public static String fileExtension = ".class";
+    
     public final Hashtable<String, Table> tables = new Hashtable<>();
 
 
@@ -36,6 +39,16 @@ public class DBApp {
         String strMaximumRowsCountinPage = properties.getProperty("MaximumRowsCountinPage");
         if (strMaximumRowsCountinPage != null) {
             maximumRowsCountinPage = Integer.parseInt(strMaximumRowsCountinPage);
+        }
+        
+        String strDbPath = properties.getProperty("DatabasePath");
+        if (strDbPath != null) {
+            databasePath = strDbPath;
+        }
+        
+        String strFileExtension = properties.getProperty("FileExtension");
+        if (strFileExtension != null) {
+            fileExtension = strFileExtension;
         }
     }
 
@@ -79,7 +92,7 @@ public class DBApp {
     }
 
     private String getMetadataPath() {
-        return "dbengine-data/metadata.csv";
+        return databasePath  + "/metadata.csv";
     }
 
     private void loadMetadata() throws DBAppException {
@@ -291,7 +304,6 @@ public class DBApp {
 
     }
 
-
     public Iterator<Tuple> selectFromTable(SQLTerm[] arrSQLTerms,
                                            String[] strarrOperators) throws DBAppException {
         Table table = getTable(arrSQLTerms[0].getTableName());
@@ -300,7 +312,8 @@ public class DBApp {
         }
         Query query = new Query(table, arrSQLTerms, strarrOperators);
 
-        Iterator<Tuple> iterator = table.iterator();
+
+        Iterator<Tuple> iterator = table.iterator(query);
         return new FilterIterator(iterator, query);
     }
 

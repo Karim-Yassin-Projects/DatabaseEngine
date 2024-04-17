@@ -46,22 +46,14 @@ public class Page implements Serializable {
         return true;
     }
 
-    public boolean delete(Tuple tuple) {
-        int index = binarySearch(tuple.getKey());
+    public Tuple delete(Comparable key) {
+        int index = binarySearch(key);
         if (index < 0) {
-            return false;
+            return null;
         }
-        var toRemove = tuples.get(index);
-        for (int i = 1; i < toRemove.getValues().size(); i++) {
-            if (toRemove.getValues().get(i) == null) {
-                continue;
-            }
-            if (!toRemove.getValues().get(i).equals(tuple.getValues().get(i))) {
-                return false;
-            }
-        }
+        Tuple tuple = tuples.get(index);
         tuples.remove(index);
-        return true;
+        return tuple;
     }
 
     public Tuple findKey(Comparable<Object> key) {
