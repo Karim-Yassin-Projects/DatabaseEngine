@@ -1,9 +1,9 @@
 package edu.guc.iluvmaadi;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Vector;
 
 public class BPlusTree implements Serializable {
     int m;
@@ -655,15 +655,15 @@ public class BPlusTree implements Serializable {
      * This method traverses the doubly linked list of the B+ tree and records
      * all values whose associated keys are within the range specified by
      * lowerBound and upperBound.
-     * @param lowerBound: (int) the lower bound of the range
-     * @param upperBound: (int) the upper bound of the range
-     * @return an ArrayList<Double> that holds all values of dictionary pairs
+     * @param lowerBound: (Comparable) the lower bound of the range
+     * @param upperBound: (Comparable) the upper bound of the range
+     * @return an Vector<Object> that holds all values of dictionary pairs
      * whose keys are within the specified range
      */
-    public ArrayList<Object> search(Comparable lowerBound, Comparable upperBound) {
+    public Vector<Object> search(Comparable lowerBound, Comparable upperBound) {
 
         // Instantiate Double array to hold values
-        ArrayList<Object> values = new ArrayList<>();
+        Vector<Object> values = new Vector<>();
 
         // Iterate through the doubly linked list of leaves
         LeafNode currNode = this.firstLeaf;

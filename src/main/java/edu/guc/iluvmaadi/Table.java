@@ -193,10 +193,19 @@ public class Table implements Iterable<Tuple> {
     }
 
     private int findPage(Comparable<Object> key) {
-        for (int i = 0; i < tableInfo.getPagesInfo().size(); i++) {
-            PageInfo pageInfo = tableInfo.getPagesInfo().get(i);
+        int hi, lo, mid;
+        hi = tableInfo.getPagesInfo().size() - 1;
+        lo = 0;
+        while (lo <= hi) {
+            mid = (hi + lo) / 2;
+            PageInfo pageInfo = tableInfo.getPagesInfo().get(mid);
             if (key.compareTo(pageInfo.getMin()) >= 0 && key.compareTo(pageInfo.getMax()) <= 0) {
-                return i;
+                return mid;
+            }
+            if (key.compareTo(pageInfo.getMin()) < 0) {
+                hi = mid - 1;
+            } else {
+                lo = mid + 1;
             }
         }
         return -1;
