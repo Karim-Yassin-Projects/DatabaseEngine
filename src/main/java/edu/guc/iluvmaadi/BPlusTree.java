@@ -415,7 +415,7 @@ public class BPlusTree implements Serializable {
 
                 /* Flow of execution goes here when key is absent in B+ tree */
 
-                // Commented by Kareem ElMeteny
+                // Commented by us
                 // System.err.println("Invalid Delete: Key unable to be found.");
 
             } else {
@@ -830,7 +830,7 @@ public class BPlusTree implements Serializable {
 
             this.keys[index] = null;
 
-            // Bug fix by Kareem ElMeteny
+            // Bug fix by us
             if (index < this.degree - 1) {
                 for (int i = index; i < this.degree - 1; i++) {
                     this.keys[i] = this.keys[i + 1];
@@ -913,7 +913,7 @@ public class BPlusTree implements Serializable {
             // Delete dictionary pair from leaf
             this.dictionary[index] = null;
 
-            // Bug fix by Kareem ElMeteny
+            // Bug fix by us
             if (index < this.numPairs - 1) {
                 for (int i = index; i < this.numPairs - 1; i++) {
                     this.dictionary[i] = this.dictionary[i + 1];
